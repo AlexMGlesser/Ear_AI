@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     lm_studio_model: str = "local-model"
     request_timeout_seconds: int = 45
     session_history_messages: int = 12
+    web_lookup_enabled: bool = False
+    web_lookup_timeout_seconds: int = 10
+    web_lookup_max_results: int = 4
 
     auth_token: str = ""
 

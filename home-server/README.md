@@ -41,6 +41,16 @@ Edit `config/assistant_rules.md` to control style and verbosity.
 - Depth is controlled by `SESSION_HISTORY_MESSAGES` in `.env`.
 - If you stop/start the phone service, a new session id is created and memory resets.
 
+## Read-Only Web Lookup
+- Optional internet lookup can be enabled to improve factual/current answers.
+- This mode is read-only: it performs HTTP GET lookups and returns summaries only.
+- It does not perform purchases, form submissions, or other write actions.
+
+Enable in `.env`:
+- `WEB_LOOKUP_ENABLED=true`
+- `WEB_LOOKUP_TIMEOUT_SECONDS=10`
+- `WEB_LOOKUP_MAX_RESULTS=4`
+
 ## If Replies Are Always Generic
 - If you keep hearing "I do not have a response right now", verify:
 	- `LM_STUDIO_MODEL` exactly matches a currently loaded model in LM Studio.
