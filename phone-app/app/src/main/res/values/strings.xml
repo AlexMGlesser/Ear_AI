@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ear AI</string>
+    <string name="choose_computer">Choose computer profile</string>
+    <string name="server_host">Server host</string>
+    <string name="server_port">Server port</string>
+    <string name="start_listening">Start</string>
+    <string name="stop_listening">Stop</string>
+    <string name="status_idle">Idle</string>
+    <string name="status_running">Running in pocket mode</string>
+    <string name="allow_fallback">Allow online fallback if offline model missing</string>
+    <string name="voice_label">Voice</string>
+    <string name="voice_auto">Auto (UK male preferred)</string>
+    <string name="voice_profile_uk_male">British Male Style (fallback profile)</string>
+    <string name="voice_profile_uk_female">British Female Style (fallback profile)</string>
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_placeholder">No diagnostics yet.</string>
+</resources>
