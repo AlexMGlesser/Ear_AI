@@ -20,6 +20,8 @@ from .agent_sandbox import AgentSandboxManager
 from .config import settings
 from .lmstudio_client import generate_reply
 from .models import AssistantResponse, ErrorResponse, UserUtterance
+from .music_player import get_music_player
+from .spotify_client import get_spotify_client
 from .rules_engine import build_system_prompt
 from .session_memory import SessionMemoryStore
 from .session_logging import log_session_started
@@ -37,8 +39,9 @@ from .web_lookup import (
 app = FastAPI(title="Ear AI Home Server", version="0.1.0")
 memory_store = SessionMemoryStore(max_messages=settings.session_history_messages)
 session_lookup_status: dict[str, str] = {}
-agent_sandbox = AgentSandboxManager()
-agent_executor = AgentExecutor(agent_sandbox)
+# agent_sandbox = AgentSandboxManager()
+# agent_executor = AgentExecutor(agent_sandbox)
+# ^ File system manager disabled for now (WIP for desktop app)
 
 
 @app.get("/health")
@@ -46,140 +49,26 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/agent/sessions", response_model=AgentSessionResponse)
-async def create_agent_session(payload: AgentSessionCreateRequest) -> AgentSessionResponse:
-    session = agent_sandbox.create_session(payload.label)
-    return AgentSessionResponse(
-        session_id=session.session_id,
-        label=session.label,
-        root_path=str(session.root_path),
-        created_at=session.created_at,
-    )
-
-
-@app.get("/agent/sessions/{session_id}", response_model=AgentSessionResponse)
-async def get_agent_session(session_id: str) -> AgentSessionResponse:
-    try:
-        root = agent_sandbox.get_session_root(session_id)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-
-    return AgentSessionResponse(
-        session_id=session_id,
-        label=session_id,
-        root_path=str(root),
-        created_at=datetime.fromtimestamp(root.stat().st_ctime, tz=timezone.utc),
-    )
-
-
-@app.post("/agent/sessions/{session_id}/list")
-async def list_agent_path(session_id: str, payload: AgentPathRequest) -> JSONResponse:
-    try:
-        entries = agent_sandbox.list_tree(session_id, payload.path)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": payload.path, "entries": entries})
-
-
-@app.post("/agent/sessions/{session_id}/read")
-async def read_agent_file(session_id: str, payload: AgentReadFileRequest) -> JSONResponse:
-    try:
-        content = agent_sandbox.read_file(session_id, payload.path)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-    except ValueError as ex:
-        raise HTTPException(status_code=400, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": payload.path, "content": content})
-
-
-@app.post("/agent/sessions/{session_id}/write")
-async def write_agent_file(session_id: str, payload: AgentWriteFileRequest) -> JSONResponse:
-    try:
-        target = agent_sandbox.write_file(session_id, payload.path, payload.content, payload.overwrite)
-    except FileExistsError as ex:
-        raise HTTPException(status_code=409, detail=str(ex)) from ex
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-    except ValueError as ex:
-        raise HTTPException(status_code=400, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": str(target), "ok": True})
-
-
-@app.post("/agent/sessions/{session_id}/append")
-async def append_agent_file(session_id: str, payload: AgentAppendFileRequest) -> JSONResponse:
-    try:
-        target = agent_sandbox.append_file(session_id, payload.path, payload.content)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-    except ValueError as ex:
-        raise HTTPException(status_code=400, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": str(target), "ok": True})
-
-
-@app.post("/agent/sessions/{session_id}/mkdir")
-async def mkdir_agent_path(session_id: str, payload: AgentPathRequest) -> JSONResponse:
-    try:
-        target = agent_sandbox.make_dir(session_id, payload.path)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": str(target), "ok": True})
-
-
-@app.post("/agent/sessions/{session_id}/move")
-async def move_agent_path(session_id: str, payload: AgentMovePathRequest) -> JSONResponse:
-    try:
-        _, destination = agent_sandbox.move_path(session_id, payload.source_path, payload.destination_path)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": str(destination), "ok": True})
-
-
-@app.post("/agent/sessions/{session_id}/delete")
-async def delete_agent_path(session_id: str, payload: AgentDeletePathRequest) -> JSONResponse:
-    try:
-        agent_sandbox.delete_path(session_id, payload.path, payload.recursive)
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-    except OSError as ex:
-        raise HTTPException(status_code=400, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, "path": payload.path, "ok": True})
-
-
-@app.post("/agent/sessions/{session_id}/run")
-async def run_agent_goal(session_id: str, payload: AgentRunGoalRequest) -> JSONResponse:
-    try:
-        result = await agent_executor.run_goal(
-            session_id=session_id,
-            goal=payload.goal,
-            max_steps=payload.max_steps,
-        )
-    except FileNotFoundError as ex:
-        raise HTTPException(status_code=404, detail=str(ex)) from ex
-    except PermissionError as ex:
-        raise HTTPException(status_code=403, detail=str(ex)) from ex
-
-    return JSONResponse({"session_id": session_id, **result})
+# ============================================================================
+# FILE SYSTEM MANAGER ENDPOINTS - DISABLED (WIP for desktop app)
+# ============================================================================
+# @app.post("/agent/sessions", response_model=AgentSessionResponse)
+# async def create_agent_session(payload: AgentSessionCreateRequest) -> AgentSessionResponse:
+#     session = agent_sandbox.create_session(payload.label)
+#     return AgentSessionResponse(...)
+# 
+# @app.get("/agent/sessions/{session_id}", response_model=AgentSessionResponse)
+# async def get_agent_session(session_id: str) -> AgentSessionResponse: ...
+# 
+# @app.post("/agent/sessions/{session_id}/list") ...
+# @app.post("/agent/sessions/{session_id}/read") ...
+# @app.post("/agent/sessions/{session_id}/write") ...
+# @app.post("/agent/sessions/{session_id}/append") ...
+# @app.post("/agent/sessions/{session_id}/mkdir") ...
+# @app.post("/agent/sessions/{session_id}/move") ...
+# @app.post("/agent/sessions/{session_id}/delete") ...
+# @app.post("/agent/sessions/{session_id}/run") ...
+# ============================================================================
 
 
 @app.websocket("/ws/assistant")
@@ -323,6 +212,170 @@ async def assistant_ws(websocket: WebSocket) -> None:
         return
 
 
+# Music Player Endpoints
+@app.get("/music/playlist")
+async def get_playlist() -> JSONResponse:
+    """Get the list of available songs."""
+    player = get_music_player()
+    playlist = player.get_playlist()
+    return JSONResponse({"ok": True, "playlist": playlist, "count": len(playlist)})
+
+
+@app.get("/music/status")
+async def get_music_status() -> JSONResponse:
+    """Get current music player status."""
+    player = get_music_player()
+    status = player.get_status()
+    return JSONResponse({"ok": True, **status})
+
+
+@app.post("/music/play")
+async def play_music(song_index: int = -1) -> JSONResponse:
+    """Play a song. If song_index is -1, plays current or first song."""
+    player = get_music_player()
+    if song_index >= 0:
+        result = player.play(song_index)
+    else:
+        result = player.play()
+    return JSONResponse(result)
+
+
+@app.post("/music/pause")
+async def pause_music() -> JSONResponse:
+    """Pause the currently playing music."""
+    player = get_music_player()
+    result = player.pause()
+    return JSONResponse(result)
+
+
+@app.post("/music/resume")
+async def resume_music() -> JSONResponse:
+    """Resume paused music."""
+    player = get_music_player()
+    result = player.resume()
+    return JSONResponse(result)
+
+
+@app.post("/music/stop")
+async def stop_music() -> JSONResponse:
+    """Stop the music player."""
+    player = get_music_player()
+    result = player.stop()
+    return JSONResponse(result)
+
+
+@app.post("/music/next")
+async def next_song() -> JSONResponse:
+    """Skip to next song."""
+    player = get_music_player()
+    result = player.next_song()
+    return JSONResponse(result)
+
+
+@app.post("/music/previous")
+async def previous_song() -> JSONResponse:
+    """Go to previous song."""
+    player = get_music_player()
+    result = player.previous_song()
+    return JSONResponse(result)
+
+
+@app.post("/music/random")
+async def play_random_song() -> JSONResponse:
+    """Play a random song from the playlist."""
+    player = get_music_player()
+    result = player.play_random()
+    return JSONResponse(result)
+
+
+@app.post("/music/volume")
+async def set_volume(level: float = 0.5) -> JSONResponse:
+    """Set volume level (0.0 to 1.0)."""
+    if not 0.0 <= level <= 1.0:
+        return JSONResponse({"ok": False, "message": "Volume must be between 0.0 and 1.0"})
+    player = get_music_player()
+    result = player.set_volume(level)
+    return JSONResponse(result)
+
+
+# Spotify Endpoints
+@app.get("/spotify/status")
+async def spotify_status() -> JSONResponse:
+    """Check if Spotify is configured."""
+    client = get_spotify_client()
+    if not client:
+        return JSONResponse({"ok": False, "message": "Spotify not configured"})
+    return JSONResponse({"ok": True, "message": "Spotify ready"})
+
+
+@app.post("/spotify/play")
+async def spotify_play(query: str) -> JSONResponse:
+    """Search for a track or playlist and return playback URI."""
+    client = get_spotify_client()
+    if not client:
+        return JSONResponse({"ok": False, "message": "Spotify not configured"})
+    
+    # Try playlist first, then track
+    playlist = client.search_playlist(query)
+    if playlist and "error" not in playlist:
+        result = client.format_for_playback(playlist)
+        result["type"] = "playlist"
+        result["message"] = f"Playing playlist: {playlist['name']}"
+        return JSONResponse({"ok": True, **result})
+    
+    track = client.search_track(query)
+    if track and "error" not in track:
+        result = client.format_for_playback(track)
+        result["type"] = "track"
+        result["message"] = f"Playing: {track['name']} by {track['artist']}"
+        return JSONResponse({"ok": True, **result})
+    
+    return JSONResponse({"ok": False, "message": f"Could not find '{query}' on Spotify"})
+
+
+@app.get("/spotify/featured")
+async def spotify_featured() -> JSONResponse:
+    """Get currently featured playlists."""
+    client = get_spotify_client()
+    if not client:
+        return JSONResponse({"ok": False, "message": "Spotify not configured"})
+    
+    playlists = client.get_featured_playlists()
+    return JSONResponse({
+        "ok": True,
+        "playlists": [client.format_for_playback(p) for p in playlists if "error" not in p],
+    })
+
+
+@app.get("/spotify/new-releases")
+async def spotify_new_releases() -> JSONResponse:
+    """Get new releases on Spotify."""
+    client = get_spotify_client()
+    if not client:
+        return JSONResponse({"ok": False, "message": "Spotify not configured"})
+    
+    albums = client.get_new_releases()
+    return JSONResponse({
+        "ok": True,
+        "albums": [client.format_for_playback(a) for a in albums if "error" not in a],
+    })
+
+
+@app.get("/spotify/recommendations")
+async def spotify_recommendations(genres: str = "pop") -> JSONResponse:
+    """Get recommendations based on genres."""
+    client = get_spotify_client()
+    if not client:
+        return JSONResponse({"ok": False, "message": "Spotify not configured"})
+    
+    genre_list = [g.strip() for g in genres.split(",")]
+    tracks = client.get_recommendations(seed_genres=genre_list)
+    return JSONResponse({
+        "ok": True,
+        "tracks": [client.format_for_playback(t) for t in tracks if "error" not in t],
+    })
+
+
 @app.get("/")
 async def root() -> JSONResponse:
     return JSONResponse(
@@ -330,5 +383,28 @@ async def root() -> JSONResponse:
             "name": "Ear AI Home Server",
             "websocket": "/ws/assistant",
             "health": "/health",
+            "agent": {
+                "status": "Work in Progress (WIP for desktop app)",
+                "note": "File system manager endpoints currently disabled",
+            },
+            "music": {
+                "playlist": "/music/playlist",
+                "status": "/music/status",
+                "play": "/music/play",
+                "pause": "/music/pause",
+                "resume": "/music/resume",
+                "stop": "/music/stop",
+                "next": "/music/next",
+                "previous": "/music/previous",
+                "random": "/music/random",
+                "volume": "/music/volume",
+            },
+            "spotify": {
+                "status": "/spotify/status",
+                "play": "/spotify/play?query=...",
+                "featured": "/spotify/featured",
+                "new_releases": "/spotify/new-releases",
+                "recommendations": "/spotify/recommendations?genres=pop,rock",
+            },
         }
     )

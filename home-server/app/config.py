@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     agent_max_file_bytes: int = 2_000_000
 
     auth_token: str = ""
+    
+    # Spotify API credentials
+    spotify_client_id: str = ""
+    spotify_client_secret: str = ""
+    spotify_redirect_uri: str = "http://localhost:8888/callback"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

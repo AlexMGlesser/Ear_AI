@@ -36,12 +36,15 @@ class ControlCenter(ctk.CTk):
 
         self.server_proc = ProcessHandle()
         self.lm_proc = ProcessHandle()
+        self.server_status = "stopped"  # "running" or "stopped"
+        self.device_connected = False
 
         self.log_queue: queue.Queue[str] = queue.Queue()
         self.settings = self._load_settings()
 
         self._build_ui()
         self.after(150, self._flush_logs)
+        self.after(1000, self._check_server_health)
 
     def _build_ui(self) -> None:
         header = ctk.CTkFrame(self, fg_color=("#1f2937", "#0f172a"), corner_radius=14)
@@ -153,6 +156,26 @@ class ControlCenter(ctk.CTk):
         ctk.CTkButton(row, text="Start Server", command=self.start_server).pack(side="left", padx=(0, 8))
         ctk.CTkButton(row, text="Stop Server", command=self.stop_server).pack(side="left", padx=(0, 8))
         ctk.CTkButton(row, text="Open Sandbox Folder", command=self.open_sandbox_folder).pack(side="left")
+
+        # Status indicators
+        status_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        status_frame.grid(row=4, column=0, columnspan=3, sticky="ew", padx=10, pady=(8, 8))
+        
+        self.server_status_label = ctk.CTkLabel(
+            status_frame,
+            text="●  Server: stopped",
+            text_color="#ef4444",
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        self.server_status_label.pack(side="left", padx=(0, 16))
+        
+        self.device_status_label = ctk.CTkLabel(
+            status_frame,
+            text="●  Device: disconnected",
+            text_color="#ef4444",
+            font=ctk.CTkFont(size=12, weight="bold")
+        )
+        self.device_status_label.pack(side="left")
 
     def _build_agent_tab(self, parent: ctk.CTkFrame) -> None:
         parent.grid_columnconfigure(0, weight=1)
@@ -377,6 +400,8 @@ class ControlCenter(ctk.CTk):
             self.server_proc.process = proc
             self.server_proc.thread = threading.Thread(target=self._pump_output, args=(proc, "server"), daemon=True)
             self.server_proc.thread.start()
+            self.server_status = "running"
+            self._update_server_status_label()
             self._log(f"[server] Starting on {host}:{port}\n")
         except Exception as ex:
             self._log(f"[server] Failed to start: {ex}\n")
@@ -385,8 +410,12 @@ class ControlCenter(ctk.CTk):
         proc = self.server_proc.process
         if not proc or proc.poll() is not None:
             self._log("[server] Not running.\n")
+            self.server_status = "stopped"
+            self._update_server_status_label()
             return
         proc.terminate()
+        self.server_status = "stopped"
+        self._update_server_status_label()
         self._log("[server] Stop signal sent.\n")
 
     def open_sandbox_folder(self) -> None:
@@ -454,9 +483,72 @@ class ControlCenter(ctk.CTk):
             return
         for line in proc.stdout:
             self.log_queue.put(f"[{label}] {line}")
+        # When process ends, update status
+        if label == "server":
+            self.server_status = "stopped"
+            self._update_server_status_label()
+
+    def _check_server_health(self) -> None:
+        """Periodic health check to verify server status and device connections."""
+        host = self.server_host.get().strip() or "127.0.0.1"
+        port = self.server_port.get().strip() or "8765"
+        health_url = f"http://{host}:{port}/health"
+        
+        # Check if server is actually responding
+        health_ok = self._http_get_json(health_url) is not None
+        
+        if health_ok and self.server_proc.process and self.server_proc.process.poll() is None:
+            self.server_status = "running"
+        else:
+            self.server_status = "stopped"
+        
+        # Check for device connections by counting active sessions
+        # For now, we'll mark device as connected if there's an active session
+        self.device_connected = False
+        if health_ok:
+            # Try to detect if there are active connections
+            # This is a simple heuristic: check if there are any recent sandbox sessions
+            sessions_dir = HOME_SERVER_DIR / self.settings.get("sandbox_root", "sandboxes")
+            if sessions_dir.exists():
+                recent_sessions = [d for d in sessions_dir.iterdir() if d.is_dir()]
+                self.device_connected = len(recent_sessions) > 0
+        
+        self._update_server_status_label()
+        self._update_device_status_label()
+        self.after(2000, self._check_server_health)
+
+    def _update_server_status_label(self) -> None:
+        """Update the server status indicator label."""
+        if self.server_status == "running":
+            self.server_status_label.configure(
+                text="●  Server: running",
+                text_color="#22c55e"
+            )
+        else:
+            self.server_status_label.configure(
+                text="●  Server: stopped",
+                text_color="#ef4444"
+            )
+
+    def _update_device_status_label(self) -> None:
+        """Update the device connection status indicator label."""
+        if self.device_connected:
+            self.device_status_label.configure(
+                text="●  Device: connected",
+                text_color="#22c55e"
+            )
+        else:
+            self.device_status_label.configure(
+                text="●  Device: disconnected",
+                text_color="#ef4444"
+            )
 
     def _log(self, message: str) -> None:
         self.log_queue.put(message)
+        # Also update status display on relevant messages
+        if "Application startup complete" in message:
+            self.server_status = "running"
+            self._update_server_status_label()
 
     def _save_settings(self) -> None:
         self.settings.update(
