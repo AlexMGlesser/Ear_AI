@@ -1,9 +1,20 @@
 import asyncio
-import datetime
 import json
 import uuid
+from datetime import datetime
 
 import websockets
+
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+HOME_SERVER_DIR = PROJECT_ROOT / "home-server"
+
+if str(HOME_SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(HOME_SERVER_DIR))
+
+from app.datetime_formatter import format_datetime_for_logs
 
 
 async def main() -> None:
@@ -12,7 +23,7 @@ async def main() -> None:
         "type": "user_utterance",
         "session_id": str(uuid.uuid4()),
         "text": "look up latest OpenAI news and give one specific fact",
-        "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+        "timestamp": format_datetime_for_logs(),
     }
 
     try:

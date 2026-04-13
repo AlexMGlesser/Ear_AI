@@ -8,6 +8,7 @@ import shutil
 import uuid
 
 from .config import settings
+from .datetime_formatter import format_datetime_for_logs
 
 
 @dataclass
@@ -32,7 +33,7 @@ class AgentSandboxManager:
         meta = {
             "session_id": session_id,
             "label": safe_label,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": format_datetime_for_logs(),
         }
         (session_dir / ".session.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 

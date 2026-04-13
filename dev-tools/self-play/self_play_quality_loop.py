@@ -22,6 +22,7 @@ if str(HOME_SERVER_DIR) not in sys.path:
 import websockets
 
 from app.config import settings
+from app.datetime_formatter import format_datetime_for_logs
 from app.web_lookup import build_web_context, parse_lookup_items
 
 STOPWORDS = {
@@ -226,7 +227,7 @@ async def ask_assistant(ws_url: str, prompt: str) -> str:
         "type": "user_utterance",
         "session_id": str(uuid.uuid4()),
         "text": prompt,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": format_datetime_for_logs(),
     }
     async with websockets.connect(ws_url) as websocket:
         await websocket.send(json.dumps(payload))
