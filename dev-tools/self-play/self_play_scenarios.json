@@ -1,0 +1,35 @@
+[
+  {
+    "id": "small-talk-hello",
+    "prompt": "Hey Dante, how are you?",
+    "requires_lookup": false,
+    "expected_not_contains": ["http://", "https://"]
+  },
+  {
+    "id": "weather-city",
+    "prompt": "What is the weather in Seattle today?",
+    "requires_lookup": true,
+    "expected_not_contains": ["as of my last update"]
+  },
+  {
+    "id": "news-topic",
+    "prompt": "Look up the latest OpenAI news and give one specific fact.",
+    "requires_lookup": true,
+    "expected_contains": ["openai"],
+    "expected_not_contains": ["as of my last update"]
+  },
+  {
+    "id": "pricing-current",
+    "prompt": "What is the current Bitcoin price?",
+    "requires_lookup": true,
+    "expected_contains": ["bitcoin"],
+    "expected_not_contains": ["as of my last update"]
+  },
+  {
+    "id": "capability-check",
+    "prompt": "Do you have internet access?",
+    "requires_lookup": false,
+    "expected_contains": ["read-only"],
+    "expected_not_contains": ["no, i do not have internet access"]
+  }
+]

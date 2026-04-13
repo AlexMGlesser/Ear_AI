@@ -15,7 +15,7 @@ class WakeFlowController(
     fun detectWakePhrase(text: String): Boolean {
         if (state != State.WAITING_WAKE) return false
         val normalized = TranscriptNormalizer.normalize(text)
-        val found = normalized.contains(wakePhrase, ignoreCase = true)
+        val found = TranscriptNormalizer.containsWakeLikeToken(normalized)
         if (found) {
             state = State.WAITING_QUERY
         }
@@ -25,8 +25,8 @@ class WakeFlowController(
     fun consumeUtterance(rawText: String): String? {
         if (state != State.WAITING_QUERY) return null
 
-        val text = TranscriptNormalizer.normalize(rawText)
-            .replace(Regex("\\b$wakePhrase\\b", RegexOption.IGNORE_CASE), "")
+        val text = TranscriptNormalizer
+            .stripWakeWords(rawText)
             .trim()
 
         if (text.isBlank()) {

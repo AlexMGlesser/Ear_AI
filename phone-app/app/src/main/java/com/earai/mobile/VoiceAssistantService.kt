@@ -52,7 +52,6 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
     private var activeVoiceLabel: String = "auto"
     private var pendingSendAtMs: Long = 0L
     private var lastRttMs: Long = -1L
-    private var followUpUntilMs: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -91,10 +90,6 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
             onAssistantReply = { text ->
                 speak(text)
                 updateNotification("Assistant replied")
-                if (looksLikeQuestion(text)) {
-                    followUpUntilMs = System.currentTimeMillis() + FOLLOW_UP_WINDOW_MS
-                    updateNotification("Assistant asked a question, listening for your reply")
-                }
                 if (pendingSendAtMs > 0L) {
                     lastRttMs = System.currentTimeMillis() - pendingSendAtMs
                     pendingSendAtMs = 0L
@@ -188,14 +183,15 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
             override fun onResults(results: Bundle?) {
                 isRecognizerStarted = false
                 recognitionErrorStreak = 0
-                val text = results
+                val candidates = results
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()
-                    ?.trim()
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotBlank() }
                     .orEmpty()
+                val text = chooseBestTranscript(candidates)
                 val confidence = results
                     ?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
-                    ?.firstOrNull()
+                    ?.maxOrNull()
                     ?: -1.0f
                 lastTranscript = text
                 lastConfidence = confidence
@@ -208,11 +204,12 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
-                val text = partialResults
+                val candidates = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    ?.firstOrNull()
-                    ?.trim()
+                    ?.map { it.trim() }
+                    ?.filter { it.isNotBlank() }
                     .orEmpty()
+                val text = chooseBestTranscript(candidates)
                 if (wakeFlowController.detectWakePhrase(text)) {
                     wakeHitCount += 1
                     updateNotification("Wake phrase detected, awaiting command")
@@ -228,24 +225,6 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
     }
 
     private fun processTranscript(text: String) {
-        if (isFollowUpWindowActive()) {
-            val followUpText = TranscriptNormalizer.normalize(text)
-                .replace(Regex("\\bdante\\b", RegexOption.IGNORE_CASE), "")
-                .trim()
-
-            if (followUpText.isBlank()) {
-                return
-            }
-
-            followUpUntilMs = 0L
-            updateNotification("Sending follow-up reply")
-            pendingSendAtMs = System.currentTimeMillis()
-            querySentCount += 1
-            socketClient?.sendUserUtterance(followUpText)
-            publishDiagnostics()
-            return
-        }
-
         if (wakeFlowController.currentState() == WakeFlowController.State.WAITING_WAKE) {
             if (wakeFlowController.detectWakePhrase(text)) {
                 wakeHitCount += 1
@@ -275,6 +254,20 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
         publishDiagnostics()
     }
 
+    private fun chooseBestTranscript(candidates: List<String>): String {
+        if (candidates.isEmpty()) return ""
+        val waitingWake = wakeFlowController.currentState() == WakeFlowController.State.WAITING_WAKE
+
+        if (waitingWake) {
+            val wakeLike = candidates.firstOrNull { TranscriptNormalizer.containsWakeLikeToken(it) }
+            if (!wakeLike.isNullOrBlank()) {
+                return wakeLike
+            }
+        }
+
+        return candidates.firstOrNull().orEmpty()
+    }
+
     private fun restartListening() {
         if (activeEngine != Engine.SPEECH_RECOGNIZER) {
             return
@@ -298,36 +291,6 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
     private fun scheduleQueryTimeout() {
         mainHandler.removeCallbacks(queryTimeoutRunnable)
         mainHandler.postDelayed(queryTimeoutRunnable, QUERY_TIMEOUT_MS)
-    }
-
-    private fun isFollowUpWindowActive(): Boolean {
-        if (followUpUntilMs <= 0L) return false
-        if (System.currentTimeMillis() > followUpUntilMs) {
-            followUpUntilMs = 0L
-            return false
-        }
-        return true
-    }
-
-    private fun looksLikeQuestion(text: String): Boolean {
-        val trimmed = text.trim()
-        if (trimmed.endsWith("?")) return true
-
-        val lowered = trimmed.lowercase(Locale.ROOT)
-        val starters = listOf(
-            "can you",
-            "could you",
-            "would you",
-            "what",
-            "when",
-            "where",
-            "who",
-            "which",
-            "how",
-            "do you",
-            "is it"
-        )
-        return starters.any { lowered.startsWith(it) }
     }
 
     private fun recognizerIntent(): Intent {
@@ -571,19 +534,19 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
         private const val CHANNEL_ID = "ear_ai_foreground"
         private const val NOTIFICATION_ID = 101
         private const val QUERY_TIMEOUT_MS = 11_000L
-        private const val FOLLOW_UP_WINDOW_MS = 16_000L
     }
 
     private val restartListeningRunnable = Runnable { restartListening() }
 
     private val queryTimeoutRunnable = Runnable {
         wakeFlowController.resetToWake()
-        followUpUntilMs = 0L
         updateNotification("Wake timed out, listening for 'Dante'")
         publishDiagnostics()
     }
 
     private fun publishDiagnostics() {
+        val activeAudioDevice = audioRouteController.getActiveAudioDevice()
+        
         DiagnosticsStore.save(
             context = this,
             engine = activeEngine.name,
@@ -594,7 +557,8 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
             lastTranscript = lastTranscript,
             lastConfidence = lastConfidence,
             lastError = lastError,
-            lastRttMs = lastRttMs
+            lastRttMs = lastRttMs,
+            audioDevice = activeAudioDevice
         )
 
         val intent = Intent(ACTION_STATUS).apply {
@@ -607,6 +571,7 @@ class VoiceAssistantService : Service(), TextToSpeech.OnInitListener {
             putExtra("last_rtt_ms", lastRttMs)
             putExtra("active_voice", activeVoiceLabel)
             putExtra("listening", activeEngine != Engine.NONE)
+            putExtra("audio_device", activeAudioDevice)
         }
         sendBroadcast(intent)
     }

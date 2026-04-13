@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     web_lookup_enabled: bool = False
     web_lookup_timeout_seconds: int = 10
     web_lookup_max_results: int = 4
+    web_lookup_direct_response: bool = True
+    web_lookup_fetch_top_pages: bool = True
+    web_lookup_page_count: int = 2
+    web_lookup_page_excerpt_chars: int = 700
+
+    agent_sandbox_root: str = "sandboxes"
+    agent_max_file_bytes: int = 2_000_000
 
     auth_token: str = ""
 

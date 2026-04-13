@@ -15,7 +15,8 @@ object DiagnosticsStore {
         lastTranscript: String,
         lastConfidence: Float,
         lastError: String,
-        lastRttMs: Long
+        lastRttMs: Long,
+        audioDevice: String = "Unknown"
     ) {
         context.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit()
             .putString("engine", engine)
@@ -27,6 +28,7 @@ object DiagnosticsStore {
             .putFloat("last_confidence", lastConfidence)
             .putString("last_error", lastError)
             .putLong("last_rtt_ms", lastRttMs)
+            .putString("audio_device", audioDevice)
             .apply()
     }
 
@@ -41,7 +43,8 @@ object DiagnosticsStore {
             lastTranscript = prefs.getString("last_transcript", "").orEmpty(),
             lastConfidence = prefs.getFloat("last_confidence", -1.0f),
             lastError = prefs.getString("last_error", "").orEmpty(),
-            lastRttMs = prefs.getLong("last_rtt_ms", -1L)
+            lastRttMs = prefs.getLong("last_rtt_ms", -1L),
+            audioDevice = prefs.getString("audio_device", "Unknown").orEmpty()
         )
     }
 
@@ -54,6 +57,7 @@ object DiagnosticsStore {
         val lastTranscript: String,
         val lastConfidence: Float,
         val lastError: String,
-        val lastRttMs: Long
+        val lastRttMs: Long,
+        val audioDevice: String = "Unknown"
     )
 }

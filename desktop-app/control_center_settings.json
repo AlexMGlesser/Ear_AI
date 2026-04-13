@@ -1,0 +1,10 @@
+{
+  "lm_executable": "",
+  "lm_args": "",
+  "model_id": "qwen/qwen3-14b",
+  "model_load_command": "",
+  "server_host": "127.0.0.1",
+  "server_port": "8765",
+  "sandbox_root": "D:/Code/LM_Playground",
+  "active_session_id": "3f8ad24510ef4fa1bc382c07219da865"
+}

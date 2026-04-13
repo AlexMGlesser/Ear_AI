@@ -22,7 +22,38 @@ $adb = 'C:\Users\<you>\AppData\Local\Android\Sdk\platform-tools\adb.exe'
 If `run-as` copy is blocked on your device, use Android Studio Device File Explorer to copy model files into:
 - `data/data/com.earai.mobile/files/vosk-model`
 
-## 3. Start app service
+## 3. Bluetooth Audio Setup (Recommended)
+
+The app now automatically detects and uses Bluetooth microphones (e.g., earbuds, headsets) when available.
+
+### How to use:
+1. **Pair your Bluetooth device** with your phone in Settings → Bluetooth
+2. **Start the app service** — the app will automatically:
+   - Detect available Bluetooth input devices
+   - Enable Bluetooth SCO (Synchronous Connection Oriented) for voice communication
+   - Route audio input through the Bluetooth microphone
+3. **Check the diagnostics pane** in the app to verify which audio device is active
+
+### Supported Bluetooth devices:
+- Bluetooth earbuds with microphones
+- Bluetooth headsets
+- Bluetooth A2DP headphones (if they support mic input)
+- Bluetooth Low Energy (BLE) headsets (Android 12+)
+
+### If Bluetooth audio isn't working:
+- **Verify pairing**: Ensure your device shows in Settings → Bluetooth
+- **Check diagnostics**: Open the app and look at the "Audio device" line in the diagnostics pane
+- **Fallback to built-in mic**: The app will use the phone's built-in microphone if:
+  - No Bluetooth device is paired, or
+  - Bluetooth SCO setup fails
+- **Restart audio**: Stop and re-start the app service to reinitialize audio routing
+
+### Technical details:
+- For Android 12+: Uses modern `AudioDeviceInfo` enumeration
+- For Android 11 and earlier: Uses Bluetooth SCO setup with automatic retry
+- Audio focus is set to `VOICE_COMMUNICATION` mode for optimal noise handling
+
+## 4. Start app service
 - Open app
 - Set server host/port
 - Tap Start
@@ -39,3 +70,13 @@ If you must test without model, enable fallback switch in the app.
 - Offline mode removes most recognizer session tones from cloud recognizer path.
 - Model quality and latency depend on phone CPU.
 - Keep battery optimization disabled for stable background behavior.
+- Bluetooth microphones typically provide better noise isolation than built-in phone mics.
+
+## Accent Support Tips
+- If your accent is frequently misheard, use a larger Vosk model than `vosk-model-small-en-us-0.15`.
+- Better accuracy options (larger download, more CPU/RAM use):
+	- `vosk-model-en-us-0.22`
+	- `vosk-model-en-us-0.22-lgraph`
+- The app now applies wake-word fuzzy matching for common pronunciations of "Dante".
+- After replacing model files, restart the app service (Stop then Start) to reload the model.
+- Using a Bluetooth microphone with clear audio input can further improve accent tolerance.

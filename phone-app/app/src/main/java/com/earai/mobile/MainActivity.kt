@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
             val error = intent.getStringExtra("last_error").orEmpty()
             val rtt = intent.getLongExtra("last_rtt_ms", -1L)
             val listening = intent.getBooleanExtra("listening", false)
+            val audioDevice = intent.getStringExtra("audio_device").orEmpty()
 
             renderDiagnostics(
                 engine = engine,
@@ -49,7 +50,8 @@ class MainActivity : AppCompatActivity() {
                 transcript = transcript,
                 confidence = confidence,
                 error = error,
-                rtt = rtt
+                rtt = rtt,
+                audioDevice = audioDevice
             )
         }
     }
@@ -66,7 +68,8 @@ class MainActivity : AppCompatActivity() {
                 transcript = d.lastTranscript,
                 confidence = d.lastConfidence,
                 error = d.lastError,
-                rtt = d.lastRttMs
+                rtt = d.lastRttMs,
+                audioDevice = d.audioDevice
             )
             mainHandler.postDelayed(this, 1000L)
         }
@@ -168,11 +171,13 @@ class MainActivity : AppCompatActivity() {
         transcript: String,
         confidence: Float,
         error: String,
-        rtt: Long
+        rtt: Long,
+        audioDevice: String = "Unknown"
     ) {
         val diagnostics = buildString {
             appendLine("Engine: $engine")
             appendLine("Listening: $listening")
+            appendLine("Audio device: $audioDevice")
             appendLine("Active voice: ${activeVoice.ifBlank { "-" }}")
             appendLine("Wake hits: $wakeHits")
             appendLine("Queries sent: $queriesSent")

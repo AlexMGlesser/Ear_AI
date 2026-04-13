@@ -27,6 +27,7 @@ Android starter app for pocket-mode voice assistant usage.
 - Follow setup in `OFFLINE_SETUP.md`.
 - Fallback is now OFF by default to prevent recognizer tone loops.
 - You can opt into fallback using the in-app switch `Allow online fallback if offline model missing`.
+- If you have a stronger accent, prefer larger offline models from `OFFLINE_SETUP.md` for better recognition.
 
 ## Diagnostics Panel
 - Main screen now includes live diagnostics for:

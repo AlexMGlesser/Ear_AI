@@ -6,6 +6,8 @@ Starter implementation for a pocket-mode Android voice assistant that wakes on "
 - `docs/` - architecture and implementation docs.
 - `phone-app/` - Android app (foreground service + wake flow + WebSocket client + TTS).
 - `home-server/` - FastAPI server that loads assistant rules and forwards prompts to LM Studio.
+- `dev-tools/` - setup/testing scripts and self-play tuning tools (not required for final runtime app).
+- `desktop-app/` - GUI control center for LM Studio, server runtime, logs, and isolated sandbox agent operations.
 
 ## Quick Start
 1. Set up and run `home-server` first.

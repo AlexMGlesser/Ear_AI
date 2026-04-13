@@ -126,7 +126,12 @@ class VoskOfflineEngine(
             if (text.isBlank()) continue
 
             val conf = item.optDouble("confidence", -1.0)
-            val score = if (conf >= 0.0) conf else (text.length / 100.0)
+            var score = if (conf >= 0.0) conf else (text.length / 100.0)
+            val normalized = TranscriptNormalizer.normalize(text)
+            if (TranscriptNormalizer.containsWakeLikeToken(normalized)) {
+                // Prefer alternatives that sound like the wake phrase to reduce accent misses.
+                score += 0.35
+            }
             if (score > bestScore) {
                 bestScore = score
                 bestText = text
